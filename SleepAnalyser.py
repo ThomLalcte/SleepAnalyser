@@ -6,7 +6,7 @@ import locale
 
 meanHighValue = 1276000
 meanLowValue = 1160574
-threshold =meanLowValue+(meanHighValue-meanLowValue)/2
+threshold = meanLowValue+(meanHighValue-meanLowValue)/2
 
 def getData(hourmin: int, hourend: int, date: datetime.datetime, dateDelta: int):
     data = []
@@ -32,10 +32,9 @@ def getData(hourmin: int, hourend: int, date: datetime.datetime, dateDelta: int)
         raise Exception("Server did not responded with 'ok'")
     return data, time
 
-def filterData(unfiltered):
+def filterData(unfiltered,var:int=5):
     gaus=[]
-    var=5
-    width=20
+    width=5*var
     for i in range(-width,width+1):
         gaus.append(2.71828**(-(i**2/(2*var**2)))/(var*(2*3.1415)**0.5))
     filtered = []
@@ -50,18 +49,26 @@ def filterData(unfiltered):
         filtered.append(tot)
     return filtered
 
+def derivDataOffset(underived):
+    derived=[]
+    underived.append(underived[-1])
+    for i in range(len(underived)-1):
+        derived.append(underived[i+1]-underived[i]+threshold)
+    del underived[-1]
+    return derived
+
 def derivData(underived):
     derived=[]
     underived.append(underived[-1])
     for i in range(len(underived)-1):
-        derived.append(underived[i+1]-underived[i])#+threshold)
+        derived.append(underived[i+1]-underived[i])
     del underived[-1]
     return derived
 
 def meanData(data):
     return sum(data)/len(data)
 
-def isThomInBed(sample):
+def isThomInBed(sample:int):
     return sample<threshold
 
 def isThomInBedServer():
@@ -70,18 +77,33 @@ def isThomInBedServer():
     if server.recv(2)==b"ok":
         return int.from_bytes(server.recv(1),"big")
 
+def plotSingleDay(date:datetime.datetime):
+    data, time = getData(-1,min(13,datetime.datetime.now().hour),date,1)
 
-data, time = getData(-4,datetime.datetime.now().hour,datetime.datetime.now(),9)
+    locale.setlocale(locale.LC_TIME,"fr_CA")
+    for i in range(len(data)):
+        if min(data[i])<10 or max(list(map(abs,derivData(filterData(data[i][:])))))<1000:
+            print("Error: Selected day has no meaningfull data")
+            return
+        plt.plot(time[0],derivDataOffset(filterData(data[i][:])),label=time[i][-1].strftime("%a %m-%d")+" deriv")
+        plt.plot(time[0],filterData(data[i][:]),label=time[i][-1].strftime("%a %m-%d")+" filtered")
+        plt.plot(time[0],data[i],label=time[i][-1].strftime("%a %m-%d")+" raw")
+    plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
+    plt.legend()
+    plt.show()
 
-# print("most likely arrival time: {}".format(time[deriv.index(min(deriv))].strftime("%H:%M")))
-# print("most likely departure time: {}".format(time[deriv.index(max(deriv))].strftime("%H:%M")))
-# print("estimated time slept: {}".format((time[deriv.index(max(deriv))]-time[deriv.index(min(deriv))])))
+def plotMultipleDays(date:datetime.datetime, nbDays: int):
+    data, time = getData(-1,min(13,datetime.datetime.now().hour),date,nbDays)
 
-locale.setlocale(locale.LC_TIME,"fr_CA")
-for i in range(len(data)):
-    if min(data[i])<10 or max(list(map(abs,derivData(filterData(data[i][:])))))<1000:
-        continue
-    plt.plot(time[0],(filterData(data[i][:])),label=time[i][0].strftime("%a %m-%d"))
-plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
-plt.legend()
-plt.show()
+    locale.setlocale(locale.LC_TIME,"fr_CA")
+    for i in range(len(data)):
+        if min(data[i])<10 or max(list(map(abs,derivData(filterData(data[i][:])))))<1000:
+            print(time[i][-1].strftime("%a %m-%d")+" has no meaningfull data")
+            continue
+        plt.plot(time[0],filterData(data[i][:]),label=time[i][-1].strftime("%a %m-%d"))
+    plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
+    plt.legend()
+    plt.show()
+
+plotMultipleDays(datetime.datetime.now()-datetime.timedelta(0),10)
+# plotSingleDay(datetime.datetime.now()-datetime.timedelta(4))
