@@ -1,3 +1,2 @@
-x=[[],[],[]]
-if x:
-    print("ah oué ya dequoi")
+import datetime as dt
+print(dt.date.today()-dt.timedelta(0)==dt.date.today())
