@@ -1,4 +1,3 @@
-from os import replace
 import matplotlib.pyplot as plt
 import matplotlib.dates as pltd
 import socket
@@ -34,7 +33,7 @@ def getData(hourmin: int, hourend: int, date: dt.date, dateDelta: int):
     return data, time
 
 def getStamps(date: dt.date, dateDelta: int):
-    stamps = {}
+    stamps:dict[str,list[dt.datetime]] = {}
     server = socket.create_connection(("192.168.0.139",10000))
     server.send(b"slepstamps")
     if server.recv(2) == b"ok":
@@ -126,7 +125,7 @@ def plotMultipleDays(date:dt.date=dt.date.today(), nbDays: int=7):
     locale.setlocale(locale.LC_TIME,"fr_CA")
     for i in range(len(data)):
         if min(data[i])<10 or max(list(map(abs,derivData(filterData(data[i][:])))))<1000:
-            print(time[i][-1].strftime("%a-%m-%d")+" has no meaningfull data")
+            print(time[i][-1].strftime("%a %m-%d")+" has no meaningfull data")
             continue
         plt.plot(time[0],filterData(data[i][:]),label=time[i][-1].strftime("%a %m-%d"))
     plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
@@ -147,7 +146,15 @@ def plotTimestamps(date:dt.date=dt.date.today(), nbDays: int=7):
     plt.grid(axis='x', color='0.7')
     plt.show()
 
+def getMeanSlep(stamps:dict[str,list[dt.datetime]] = getStamps(dt.date.today(),7)):
+    summ:int=0
+    i:dt.datetime
+    for i in stamps:
+        summ+=(stamps[i][1]-stamps[i][0]).total_seconds()
+    raw:float=summ/len(stamps)/60/60
+    return dt.timedelta(hours=int(raw),minutes=int(raw%1*60),seconds=int(raw%1*60%1*60))
 
-plotMultipleDays(dt.date.today()-dt.timedelta(0),30)
+# plotMultipleDays(dt.date.today()-dt.timedelta(0),30)
 # plotSingleDay(dt.date.today()-dt.timedelta(0))
 # plotTimestamps(nbDays=7)
+print(getMeanSlep())
