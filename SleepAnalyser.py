@@ -1,14 +1,15 @@
+from os import replace
 import matplotlib.pyplot as plt
 import matplotlib.dates as pltd
 import socket
-import datetime
+import datetime as dt
 import locale
 
 meanHighValue = 1276000
 meanLowValue = 1160574
 threshold = meanLowValue+(meanHighValue-meanLowValue)/2
 
-def getData(hourmin: int, hourend: int, date: datetime.datetime, dateDelta: int):
+def getData(hourmin: int, hourend: int, date: dt.date, dateDelta: int):
     data = []
     time = []
     server = socket.create_connection(("192.168.0.139",10000))
@@ -24,13 +25,30 @@ def getData(hourmin: int, hourend: int, date: datetime.datetime, dateDelta: int)
             for ii in range(hourmin,hourend):
                 for iii in range(20):
                     if ii<0:
-                        time[i].append(date.replace(hour=24+ii,minute=iii*3)-datetime.timedelta(1+i))
+                        time[i].append(dt.datetime.combine(date,dt.time(hour=24+ii,minute=iii*3))-dt.timedelta(1+i))
                     else:
-                        time[i].append(date.replace(hour=ii,minute=iii*3)-datetime.timedelta(i))
+                        time[i].append(dt.datetime.combine(date,dt.time(hour=ii,minute=iii*3))-dt.timedelta(i))
                     data[i].append(abs(int.from_bytes(server.recv(4),"big",signed=True)))
     else:
         raise Exception("Server did not responded with 'ok'")
     return data, time
+
+def getStamps(date: dt.date, dateDelta: int):
+    stamps = {}
+    server = socket.create_connection(("192.168.0.139",10000))
+    server.send(b"slepstamps")
+    if server.recv(2) == b"ok":
+        server.send((date.strftime("%Y-%m-%d")).encode("utf-8"))
+        server.send(int.to_bytes(dateDelta,1,"big",signed=False))
+        toa:str
+        tod:str
+        for i in range(dateDelta):
+            toa=server.recv(5).decode("utf-8")
+            if toa=="error":
+                continue
+            tod=server.recv(5).decode("utf-8")
+            stamps.update({(date-dt.timedelta(i)).strftime("%Y-%m-%d"):[dt.datetime.combine(date-dt.timedelta(i),dt.time(hour=int(toa[0:2]),minute=int(toa[3:6]))),dt.datetime.combine(date-dt.timedelta(i),dt.time(hour=int(tod[0:2]),minute=int(tod[3:6])))]})
+    return stamps
 
 def filterData(unfiltered,var:int=5):
     gaus=[]
@@ -77,9 +95,11 @@ def isThomInBedServer():
     if server.recv(2)==b"ok":
         return int.from_bytes(server.recv(1),"big")
 
-def plotSingleDay(date:datetime.datetime):
-    data, time = getData(-1,min(13,datetime.datetime.now().hour),date,1)
-
+def plotSingleDay(date:dt.date=dt.date.today()):
+    if date==dt.date.today():
+        data, time = getData(-1,min(14,dt.datetime.now().hour),date,1)
+    else:
+        data, time = getData(-1,14,date,1)
     locale.setlocale(locale.LC_TIME,"fr_CA")
     for i in range(len(data)):
         if min(data[i])<10 or max(list(map(abs,derivData(filterData(data[i][:])))))<1000:
@@ -92,18 +112,34 @@ def plotSingleDay(date:datetime.datetime):
     plt.legend()
     plt.show()
 
-def plotMultipleDays(date:datetime.datetime, nbDays: int):
-    data, time = getData(-1,min(13,datetime.datetime.now().hour),date,nbDays)
+def plotMultipleDays(date:dt.date=dt.date.today(), nbDays: int=7):
+    if date==dt.date.today():
+        data, time = getData(-1,min(14,dt.datetime.now().hour),date,nbDays)
+    else:
+        data, time = getData(-1,14,date,nbDays)
 
     locale.setlocale(locale.LC_TIME,"fr_CA")
     for i in range(len(data)):
         if min(data[i])<10 or max(list(map(abs,derivData(filterData(data[i][:])))))<1000:
-            print(time[i][-1].strftime("%a %m-%d")+" has no meaningfull data")
+            print(time[i][-1].strftime("%a-%m-%d")+" has no meaningfull data")
             continue
         plt.plot(time[0],filterData(data[i][:]),label=time[i][-1].strftime("%a %m-%d"))
     plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
     plt.legend()
     plt.show()
 
-plotMultipleDays(datetime.datetime.now()-datetime.timedelta(0),10)
-# plotSingleDay(datetime.datetime.now()-datetime.timedelta(4))
+def plotTimestamps(date:dt.date=dt.date.today(), nbDays: int=7):
+    stamps = getStamps(date,nbDays)
+    fig, ax = plt.subplots()
+    for i in stamps:
+        ax.bar(dt.datetime.strptime(i,"%Y-%m-%d"),stamps[i][1]-stamps[i][0],0.1,bottom=stamps[i][0].replace(day=dt.datetime.now().day),label=i)
+    plt.gca().xaxis.set_major_formatter(pltd.DateFormatter("%Y-%m-%d"))
+    plt.gca().yaxis.set_major_formatter(pltd.DateFormatter("%H:%M"))
+    plt.ylim([dt.datetime.now().replace(hour=23,minute=0)-dt.timedelta(1), dt.datetime.now().replace(hour=14,minute=0)])
+    plt.grid(axis='x', color='0.7')
+    plt.show()
+
+
+# plotMultipleDays(dt.date.today()-dt.timedelta(1),30)
+# plotSingleDay(dt.date.today()-dt.timedelta(1))
+plotTimestamps()
