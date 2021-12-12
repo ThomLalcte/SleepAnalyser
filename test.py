@@ -1,2 +1,3 @@
-import datetime as dt
-print(dt.date.today()-dt.timedelta(0)==dt.date.today())
+x=[[1,2],[1,2],[1,2],[1,2]]
+for i in x:
+    print(x.index(i))

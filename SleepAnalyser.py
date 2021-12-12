@@ -7,11 +7,11 @@ import locale
 
 meanHighValue = 1276000
 meanLowValue = 1160574
-threshold = meanLowValue+(meanHighValue-meanLowValue)/2
+threshold = int(meanLowValue+(meanHighValue-meanLowValue)/2)
 
 def getData(hourmin: int, hourend: int, date: dt.date, dateDelta: int):
-    data = []
-    time = []
+    data:list[list[int]] = []
+    time:list[list[dt.datetime]] = []
     server = socket.create_connection(("192.168.0.139",10000))
     server.send(b"slepdata")
     if server.recv(2) == b"ok":
@@ -44,13 +44,18 @@ def getStamps(date: dt.date, dateDelta: int):
         tod:str
         for i in range(dateDelta):
             toa=server.recv(5).decode("utf-8")
-            if toa=="error":
+            if toa=="error" or toa=="":
+                print((date-dt.timedelta(i)).strftime("%Y-%m-%d")+" has no usefull data")
+                continue
+            if toa=="keyer":
+                server.recv(3)
+                print((date-dt.timedelta(i)).strftime("%Y-%m-%d")+" is not catalogued")
                 continue
             tod=server.recv(5).decode("utf-8")
             stamps.update({(date-dt.timedelta(i)).strftime("%Y-%m-%d"):[dt.datetime.combine(date-dt.timedelta(i),dt.time(hour=int(toa[0:2]),minute=int(toa[3:6]))),dt.datetime.combine(date-dt.timedelta(i),dt.time(hour=int(tod[0:2]),minute=int(tod[3:6])))]})
     return stamps
 
-def filterData(unfiltered,var:int=5):
+def filterData(unfiltered:list[list[int]], var:int=5):
     gaus=[]
     width=5*var
     for i in range(-width,width+1):
@@ -67,7 +72,7 @@ def filterData(unfiltered,var:int=5):
         filtered.append(tot)
     return filtered
 
-def derivDataOffset(underived):
+def derivDataOffset(underived:list[list[int]]):
     derived=[]
     underived.append(underived[-1])
     for i in range(len(underived)-1):
@@ -75,7 +80,7 @@ def derivDataOffset(underived):
     del underived[-1]
     return derived
 
-def derivData(underived):
+def derivData(underived:list[list[int]]):
     derived=[]
     underived.append(underived[-1])
     for i in range(len(underived)-1):
@@ -83,7 +88,7 @@ def derivData(underived):
     del underived[-1]
     return derived
 
-def meanData(data):
+def meanData(data:list[int]):
     return sum(data)/len(data)
 
 def isThomInBed(sample:int):
@@ -130,16 +135,19 @@ def plotMultipleDays(date:dt.date=dt.date.today(), nbDays: int=7):
 
 def plotTimestamps(date:dt.date=dt.date.today(), nbDays: int=7):
     stamps = getStamps(date,nbDays)
-    fig, ax = plt.subplots()
     for i in stamps:
-        ax.bar(dt.datetime.strptime(i,"%Y-%m-%d"),stamps[i][1]-stamps[i][0],0.1,bottom=stamps[i][0].replace(day=dt.datetime.now().day),label=i)
-    plt.gca().xaxis.set_major_formatter(pltd.DateFormatter("%Y-%m-%d"))
+        plt.bar(dt.datetime.strptime(i,"%Y-%m-%d"),stamps[i][1]-stamps[i][0],0.1,bottom=stamps[i][0].replace(day=dt.datetime.now().day,month=dt.datetime.now().month,year=dt.datetime.now().year),label=i,zorder=10)
+    locale.setlocale(locale.LC_TIME,"fr_CA")
+    plt.gca().xaxis.set_major_formatter(pltd.DateFormatter("%a %m-%d"))#"%Y-%m-%d"))
     plt.gca().yaxis.set_major_formatter(pltd.DateFormatter("%H:%M"))
+    for i in range(0,nbDays+2,7):
+        plt.axvline(dt.date.today()-dt.timedelta(i,hours=12),color="0.1")
     plt.ylim([dt.datetime.now().replace(hour=23,minute=0)-dt.timedelta(1), dt.datetime.now().replace(hour=14,minute=0)])
+    plt.xlim([dt.date.today()-dt.timedelta(nbDays+1),dt.date.today()+dt.timedelta(1)])
     plt.grid(axis='x', color='0.7')
     plt.show()
 
 
-# plotMultipleDays(dt.date.today()-dt.timedelta(1),30)
-# plotSingleDay(dt.date.today()-dt.timedelta(1))
-plotTimestamps()
+plotMultipleDays(dt.date.today()-dt.timedelta(0),30)
+# plotSingleDay(dt.date.today()-dt.timedelta(0))
+# plotTimestamps(nbDays=7)
