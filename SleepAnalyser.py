@@ -9,6 +9,7 @@ meanLowValue = 1160574
 threshold = int(meanLowValue+(meanHighValue-meanLowValue)/2)
 
 def getData(hourmin: int, hourend: int, date: dt.date, dateDelta: int):
+    """poll data from hourmin to hourend of the day specified by date to said day minus dateDelta day before"""
     data:list[list[int]] = []
     time:list[list[dt.datetime]] = []
     server = socket.create_connection(("192.168.0.139",10000))
@@ -99,11 +100,11 @@ def isThomInBedServer():
     if server.recv(2)==b"ok":
         return int.from_bytes(server.recv(1),"big")
 
-def plotSingleDay(date:dt.date=dt.date.today()):
+def plotSingleDay(date:dt.date=dt.date.today(), hourmin: int=-1, hourend: int=14):
     if date==dt.date.today():
-        data, time = getData(-1,min(14,dt.datetime.now().hour),date,1)
+        data, time = getData(hourmin,min(hourend,dt.datetime.now().hour),date,1)
     else:
-        data, time = getData(-1,14,date,1)
+        data, time = getData(hourmin,hourend,date,1)
     locale.setlocale(locale.LC_TIME,"fr_CA")
     for i in range(len(data)):
         if min(data[i])<10 or max(list(map(abs,derivData(filterData(data[i][:])))))<1000:
@@ -133,6 +134,7 @@ def plotMultipleDays(date:dt.date=dt.date.today(), nbDays: int=7):
     plt.show()
 
 def plotTimestamps(date:dt.date=dt.date.today(), nbDays: int=7):
+    """TODO mettre les marqueurs de semaine à chaque dimanche seulement"""
     stamps = getStamps(date,nbDays)
     for i in stamps:
         plt.bar(dt.datetime.strptime(i,"%Y-%m-%d"),stamps[i][1]-stamps[i][0],0.1,bottom=stamps[i][0].replace(day=dt.datetime.now().day,month=dt.datetime.now().month,year=dt.datetime.now().year),label=i,zorder=10)
@@ -146,7 +148,7 @@ def plotTimestamps(date:dt.date=dt.date.today(), nbDays: int=7):
     plt.grid(axis='x', color='0.7')
     plt.show()
 
-def getMeanSlep(stamps:dict[str,list[dt.datetime]] = getStamps(dt.date.today(),7)):
+def getMeanSlep(stamps:dict[str,list[dt.datetime]]):
     summ:int=0
     i:dt.datetime
     for i in stamps:
@@ -154,7 +156,10 @@ def getMeanSlep(stamps:dict[str,list[dt.datetime]] = getStamps(dt.date.today(),7
     raw:float=summ/len(stamps)/60/60
     return dt.timedelta(hours=int(raw),minutes=int(raw%1*60),seconds=int(raw%1*60%1*60))
 
-# plotMultipleDays(dt.date.today()-dt.timedelta(0),30)
+#TODO graphique de la qte heures de sommeil/jour
+#TODO graphique de la variance des toa/tod
+
+print(getMeanSlep(getStamps(dt.date.today(),30)))
+# plotMultipleDays(dt.date.today()-dt.timedelta(0),7)
 # plotSingleDay(dt.date.today()-dt.timedelta(0))
-# plotTimestamps(nbDays=7)
-print(getMeanSlep())
+plotTimestamps(nbDays=16)
