@@ -1,21 +1,24 @@
-import matplotlib.pyplot as plt
-import matplotlib.dates as pltd
-import socket
 import datetime as dt
 import locale
+import socket
+
+import matplotlib.dates as pltd
+import matplotlib.pyplot as plt
 
 meanHighValue = 1276000
 meanLowValue = 1160574
 threshold = int(meanLowValue+(meanHighValue-meanLowValue)/2)
 meanSlep = dt.timedelta(hours=8,minutes=16,seconds=45)
 
-def getData(hourmin: int, hourend: int, date: dt.date, dateDelta: int):
+def getSleepData(hourmin: int, hourend: int, date: dt.date, dateDelta: int, type:str):
     """poll data from hourmin to hourend of the day specified by date to said day minus dateDelta day before"""
     data:list[list[int]] = []
     time:list[list[dt.datetime]] = []
-    server = socket.create_connection(("192.168.0.139",10000))
-    server.send(b"slepdata")
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.connect(("192.168.0.139",10000))
+    server.send(b"data")
     if server.recv(2) == b"ok":
+        server.send(type.encode("utf-8"))
         server.send((date.strftime("%Y-%m-%d")).encode("utf-8"))
         server.send(int.to_bytes(dateDelta,1,"big",signed=False))
         server.send(int.to_bytes(hourmin,1,"big",signed=True))
@@ -30,9 +33,15 @@ def getData(hourmin: int, hourend: int, date: dt.date, dateDelta: int):
                     else:
                         time[i].append(dt.datetime.combine(date,dt.time(hour=ii,minute=iii*3))-dt.timedelta(i))
                     sample=int.from_bytes(server.recv(4),"big",signed=True)
-                    data[i].append(abs(sample))
+                    data[i].append(sample)
+                if min(data[i])<-1:
+                    print("server encoutered error {} at {}:{}h".format(min(data[i]),ii,i))
+                    server.close()
+                    return data, time
+                    
     else:
         raise Exception("Server did not responded with 'ok'")
+    server.close()
     return data, time
 
 def getStamps(date: dt.date, dateDelta: int):
@@ -121,39 +130,46 @@ def isThomInBedServer():
 
 def plotSingleDay(date:dt.date=dt.date.today(), hourmin: int=-1, hourend: int=14):
     if date==dt.date.today():
-        data, time = getData(hourmin,min(hourend,dt.datetime.now().hour),date,1)
+        wdata, time = getSleepData(hourmin,min(hourend,dt.datetime.now().hour),date,1,"wigg")
+        cdata, time = getSleepData(hourmin,min(hourend,dt.datetime.now().hour),date,1,"capp")
     else:
-        data, time = getData(hourmin,hourend,date,1)
+        wdata, time = getSleepData(hourmin,hourend,date,1,"wigg")
+        cdata, time = getSleepData(hourmin,hourend,date,1,"capp")
     locale.setlocale(locale.LC_TIME,"fr_CA")
-    for i in range(len(data)):
-        if min(data[i])<10:
-            print("Error: Selected day has <10 values")
-            return
-        if max(list(map(abs,derivData(filterData(data[i][:])))))<1000:
-            print("Error: Selected day has no significant deriv")
-            return
-        plt.plot(time[0],derivDataOffset(filterData(data[i][:])),label=time[i][-1].strftime("%a %m-%d")+" deriv")
-        plt.plot(time[0],filterData(data[i][:]),label=time[i][-1].strftime("%a %m-%d")+" filtered")
-        plt.plot(time[0],data[i],label=time[i][-1].strftime("%a %m-%d")+" raw")
+    if min(cdata[0])<10:
+        print("Error: Selected day has <10 values")
+        return
+    if max(list(map(abs,derivData(filterData(cdata[0][:])))))<1000:
+        print("Error: Selected day has no significant deriv")
+        return
+    for i in range(len(wdata[0])):
+        wdata[0][i]+=threshold
+    plt.plot(time[0],filterData(cdata[0][:]),label=time[0][-1].strftime("%a %m-%d")+" cap filtered")
+    plt.plot(time[0],derivDataOffset(filterData(cdata[0][:])),label=time[0][-1].strftime("%a %m-%d")+" cap deriv")
+    plt.plot(time[0],cdata[0],label=time[0][-1].strftime("%a %m-%d")+" cap raw")
+    plt.plot(time[0],wdata[0],label=time[0][-1].strftime("%a %m-%d")+" wiggle raw")
     plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
     plt.legend()
     plt.show()
 
-def plotMultipleDays(date:dt.date=dt.date.today(), nbDays: int=7):
+def plotMultipleDays(date:dt.date=dt.date.today(), nbDays: int=7, type:str="capp"):
     if date==dt.date.today():
-        data, time = getData(-1,min(14,dt.datetime.now().hour),date,nbDays)
+        data, time = getSleepData(-1,min(14,dt.datetime.now().hour),date,nbDays,type)
     else:
-        data, time = getData(-1,14,date,nbDays)
+        data, time = getSleepData(-1,14,date,nbDays,type)
 
     locale.setlocale(locale.LC_TIME,"fr_CA")
     for i in range(len(data)):
-        if min(data[i])==1:
+        if min(data[i])<0 and type=="capp":
             print(time[i][-1].strftime("%a %m-%d")+" has errors")
             continue
-        if max(list(map(abs,derivData(filterData(data[i][:])))))<1000:
+        if max(list(map(abs,derivData(filterData(data[i][:])))))<1000 and type=="capp":
             print(time[i][-1].strftime("%a %m-%d")+" has no meaningfull data")
             continue
-        plt.plot(time[0],filterData(data[i][:]),label=time[i][-1].strftime("%a %m-%d"))
+        if type=="capp":
+            plt.plot(time[0][:len(data[i])],filterData(data[i][:]),label=time[i][-1].strftime("%a %m-%d"))
+        else:
+            plt.plot(time[0][:len(data[i])],data[i],label=time[i][-1].strftime("%a %m-%d"))
     plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
     plt.legend()
     plt.show()
@@ -205,11 +221,11 @@ def plotSlepAmount(date:dt.date=dt.date.today(), nbDays: int=7):
     plt.grid(axis='x', color='0.7')
     plt.show()
 
-def synchronousnPlot(date:dt.date=dt.date.today(), nbDays: int=7, mode:str="toa"):
+def synchronousnPlot(date:dt.date=dt.date.today(), nbDays: int=7, mode:str="toa", type:str="capp"):
     if date==dt.date.today():
-        data, time = getData(-1,min(14,dt.datetime.now().hour),date,nbDays)
+        data, time = getSleepData(-1,min(14,dt.datetime.now().hour),date,nbDays,type)
     else:
-        data, time = getData(-1,14,date,nbDays)
+        data, time = getSleepData(-1,14,date,nbDays,type)
     to:list[int]=[]
     toDel=[]
     for i in data:
@@ -244,29 +260,28 @@ def synchronousnPlot(date:dt.date=dt.date.today(), nbDays: int=7, mode:str="toa"
     plt.show()
     
 def debugData(hourmin: int=-1, hourend: int=min(14,dt.datetime.now().hour), date: dt.date=dt.date.today(), dateDelta: int=14):
-    data, time = getData(-1,min(14,dt.datetime.now().hour),dt.date.today()-dt.timedelta(9),14)
+    data, time = getSleepData(-1,min(14,dt.datetime.now().hour),dt.date.today()-dt.timedelta(9),14,"capp")
     for i in data:
         if min(i)<10:
             print(time[data.index(i)][i.index(min(i))],"<10 ->",min(i)," in ",data.index(i)," at ",i.index(min(i)))
         if max(list(map(abs,derivData(filterData(i[:])))))<1000:
             print(time[data.index(i)][-1],"deriv<1000")
 
-def simSlepReport2(SlepSample:int, wiggleSample:int):
-    server = socket.create_connection(("192.168.0.139",10000))
-    server.send(b"slep2")
-    print("ETA: {} seconds".format(int.from_bytes(server.recv(4),"big")))
-    server.send(int.to_bytes(SlepSample,4,"big"))
-    server.send(int.to_bytes(wiggleSample,4,"big"))
-    server.close()
-
+def plotData(date:dt.date, hourmin: int, hourend: int, type:str):
+    data, time = getSleepData(hourmin,hourend,date,1,type)
+    locale.setlocale(locale.LC_TIME,"fr_CA")
+    plt.plot(time[0],data[0],label=time[0][-1].strftime("%a %m-%d")+" "+type)
+    plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
+    plt.legend()
+    plt.show()
 
 #TODO graphique de la variance des toa/tod
 #TODO score de sommeil basé sur la variance du signal durant la nuit
 
 # print(getMeanSlep(getStamps(dt.date.today(),28)))
-# plotMultipleDays(dt.date.today()-dt.timedelta(0),3)
+# plotMultipleDays(dt.date.today()-dt.timedelta(0),14,type="capp")
 # plotSingleDay(dt.date.today()-dt.timedelta(0))
-plotTimestamps(nbDays=14)
+# plotTimestamps(nbDays=7)
 # plotSlepAmount(nbDays=21)
 # synchronousnPlot(date=dt.date.today()-dt.timedelta(1), nbDays=14, mode="tod")
-
+plotData(dt.date.today(),0,23,"wigg")
