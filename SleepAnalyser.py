@@ -4,6 +4,7 @@ import socket
 
 import matplotlib.dates as pltd
 import matplotlib.pyplot as plt
+import json as js
 
 meanHighValue = 1276000
 meanLowValue = 1160574
@@ -35,7 +36,7 @@ def getSleepData(hourmin: int, hourend: int, date: dt.date, dateDelta: int, type
                     sample=int.from_bytes(server.recv(4),"big",signed=True)
                     data[i].append(sample)
                 if min(data[i])<-1:
-                    print("server encoutered error {} at {}:{}h".format(min(data[i]),ii,i))
+                    print("{}: server encoutered error {} at {}:{}h".format("getSleepData",min(data[i]),ii,i))
                     server.close()
                     return data, time
                     
@@ -57,16 +58,16 @@ def getStamps(date: dt.date, dateDelta: int):
             toas=server.recv(5).decode("utf-8")
             datestr=(date-dt.timedelta(i)).strftime("%Y-%m-%d")
             if toas=="error" or toas=="":
-                print(datestr+" has errors in it's data")
+                print("getStamps: "+ datestr+" has errors in it's data")
                 continue
             elif toas=="keyer":
-                print(datestr+" is not catalogued")
+                print("getStamps: "+ datestr+" is not catalogued")
                 continue
             elif toas=="inder":
-                print(datestr+" index error was caught at the server side")
+                print("getStamps: "+ datestr+" index error was caught at the server side")
                 continue
             elif toas=="inslp":
-                print(datestr+" sleep pattern is invalid: see slep_timestamps_data.json for details")
+                print("getStamps: "+ datestr+" sleep pattern is invalid: see slep_timestamps_data.json for details")
                 continue
             tods=server.recv(5).decode("utf-8")
             toa=dt.datetime.now().replace(hour=int(toas[0:2]),minute=int(toas[3:6]))
@@ -80,7 +81,7 @@ def filterData(unfiltered:list[int], var:int=5):
     if type(unfiltered[0])!=int and type(unfiltered[0])!=float:
         raise TypeError("content of unfiltered isn't of type int or float but instead of type {}".format(type(unfiltered[0])))
     gaus=[]
-    width=5*var
+    width=round(5*var)
     for i in range(-width,width+1):
         gaus.append(2.71828**(-(i**2/(2*var**2)))/(var*(2*3.1415)**0.5))
     filtered = []
@@ -137,11 +138,12 @@ def plotSingleDay(date:dt.date=dt.date.today(), hourmin: int=-1, hourend: int=14
         cdata, time = getSleepData(hourmin,hourend,date,1,"capp")
     locale.setlocale(locale.LC_TIME,"fr_CA")
     if min(cdata[0])<10:
-        print("Error: Selected day has <10 values")
-        return
+        print("plotSingleDay: Selected day has <10 values")
+        # return
     if max(list(map(abs,derivData(filterData(cdata[0][:])))))<1000:
-        print("Error: Selected day has no significant deriv")
-        return
+        print("plotSingleDay: Selected day has no significant deriv")
+        # return
+    # maen = meanData(cdata[0][int(len(cdata[0])/3):int(2*len(cdata[0])/3)])
     for i in range(len(wdata[0])):
         wdata[0][i]+=threshold
     plt.plot(time[0],filterData(cdata[0][:]),label=time[0][-1].strftime("%a %m-%d")+" cap filtered")
@@ -150,7 +152,6 @@ def plotSingleDay(date:dt.date=dt.date.today(), hourmin: int=-1, hourend: int=14
     plt.plot(time[0],wdata[0],label=time[0][-1].strftime("%a %m-%d")+" wiggle raw")
     plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
     plt.legend()
-    plt.show()
 
 def plotMultipleDays(date:dt.date=dt.date.today(), nbDays: int=7, type:str="capp"):
     if date==dt.date.today():
@@ -161,18 +162,17 @@ def plotMultipleDays(date:dt.date=dt.date.today(), nbDays: int=7, type:str="capp
     locale.setlocale(locale.LC_TIME,"fr_CA")
     for i in range(len(data)):
         if min(data[i])<0 and type=="capp":
-            print(time[i][-1].strftime("%a %m-%d")+" has errors")
+            print("plotMultipleDays: "+ time[i][-1].strftime("%a %m-%d")+" has errors")
             continue
         if max(list(map(abs,derivData(filterData(data[i][:])))))<1000 and type=="capp":
-            print(time[i][-1].strftime("%a %m-%d")+" has no meaningfull data")
+            print("plotMultipleDays: "+ time[i][-1].strftime("%a %m-%d")+" has no meaningfull data")
             continue
         if type=="capp":
             plt.plot(time[0][:len(data[i])],filterData(data[i][:]),label=time[i][-1].strftime("%a %m-%d"))
         else:
-            plt.plot(time[0][:len(data[i])],data[i],label=time[i][-1].strftime("%a %m-%d"))
+            plt.plot(time[0][:len(data[i])],filterData(data[i][:]),label=time[i][-1].strftime("%a %m-%d"))
     plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
     plt.legend()
-    plt.show()
 
 def plotTimestamps(date:dt.date=dt.date.today(), nbDays: int=7):
     stamps = getStamps(date,nbDays)
@@ -187,8 +187,6 @@ def plotTimestamps(date:dt.date=dt.date.today(), nbDays: int=7):
     plt.ylim([dt.datetime.now().replace(hour=23,minute=0)-dt.timedelta(1), dt.datetime.now().replace(hour=14,minute=0)])
     plt.xlim([dt.date.today()-dt.timedelta(nbDays+1),dt.date.today()+dt.timedelta(1)])
     plt.grid(axis='x', color='0.7')
-    # plt.legend()
-    plt.show()
 
 def getMeanSlep(stamps:dict[str,list[dt.datetime]]):
     summ:int=0
@@ -219,45 +217,49 @@ def plotSlepAmount(date:dt.date=dt.date.today(), nbDays: int=7):
     plt.gca().xaxis.set_major_formatter(pltd.DateFormatter("%a %m-%d"))#"%Y-%m-%d"))
     plt.ylim([0,12])
     plt.grid(axis='x', color='0.7')
-    plt.show()
 
-def synchronousnPlot(date:dt.date=dt.date.today(), nbDays: int=7, mode:str="toa", type:str="capp"):
-    if date==dt.date.today():
+def synchronousnPlot(date:dt.date=dt.date.today(), nbDays: int=7, mode:str="toa", type:str="capp", var:int=8):
+    if date==dt.date.today() and dt.datetime.now().hour<8:
+        data, time = getSleepData(-1,14,date-dt.timedelta(1),nbDays,type)
+        stamps = getStamps(date-dt.timedelta(1),nbDays)
+    elif date==dt.date.today():
         data, time = getSleepData(-1,min(14,dt.datetime.now().hour),date,nbDays,type)
+        stamps = getStamps(date,nbDays)
     else:
         data, time = getSleepData(-1,14,date,nbDays,type)
+        stamps = getStamps(date,nbDays)
     to:list[int]=[]
     toDel=[]
-    for i in data:
-        if min(i)<10:
-            print(time[data.index(i)][i.index(min(i))],"<10 ->",min(i)," in ",data.index(i)," at ",i.index(min(i)))
-            print(time[data.index(i)][-1],"<10")
-            toDel+=[data.index(i)]
-        elif max(list(map(abs,derivData(filterData(i[:])))))<5000:
-            print(time[data.index(i)][-1],"deriv<1000")
-            toDel+=[data.index(i)]
-            
-    toDel.reverse()
-    for i in toDel:
-        del time[i]
-        del data[i]
+    if type=="capp":
+        for i in data:
+            if min(i)<10:
+                print(time[data.index(i)][i.index(min(i))],"<10 ->",min(i)," in ",data.index(i)," at ",i.index(min(i)))
+                print(time[data.index(i)][-1],"<10")
+                toDel+=[data.index(i)]
+            elif max(list(map(abs,derivData(filterData(i[:])))))<5000:
+                print(time[data.index(i)][-1],"deriv<1000")
+                toDel+=[data.index(i)]
+        toDel.reverse()
+        for i in toDel:
+            del time[i]
+            del data[i]
     for i in data:
         deriv=derivData(filterData(i[:]))
         if mode=="toa":
             to+=[deriv.index(min(deriv))]
         if mode=="tod":
             to+=[deriv.index(max(deriv))+3]
+    #TODO remplacer ça par l'utilistion des stamps
 
     locale.setlocale(locale.LC_TIME,"fr_CA")
     for i in range(len(data)):
         if mode=="toa":
-            plt.plot(time[0][:len(time[0])-to[i]],filterData(data[i][to[i]:],8),label=time[i][-1].strftime("%a %m-%d"))
+            plt.plot(time[0][:len(time[0])-to[i]],filterData(data[i][to[i]:],var),label=time[i][-1].strftime("%a %m-%d"))
         if mode=="tod":
-            plt.plot(time[0][len(time[0])-to[i]:],filterData(data[i][:to[i]],8),label=time[i][-1].strftime("%a %m-%d"))
+            plt.plot(time[0][len(time[0])-to[i]:],filterData(data[i][:to[i]],var),label=time[i][-1].strftime("%a %m-%d"))
     plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
-    plt.xlim([time[0][0],time[0][-1]+dt.timedelta(hours=2)])
+    plt.xlim([time[0][0]-dt.timedelta(hours=2),time[0][-1]+dt.timedelta(hours=2)])
     plt.legend()
-    plt.show()
     
 def debugData(hourmin: int=-1, hourend: int=min(14,dt.datetime.now().hour), date: dt.date=dt.date.today(), dateDelta: int=14):
     data, time = getSleepData(-1,min(14,dt.datetime.now().hour),dt.date.today()-dt.timedelta(9),14,"capp")
@@ -273,15 +275,23 @@ def plotData(date:dt.date, hourmin: int, hourend: int, type:str):
     plt.plot(time[0],data[0],label=time[0][-1].strftime("%a %m-%d")+" "+type)
     plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
     plt.legend()
-    plt.show()
+
+def InbedSince():
+    cdata, time = getSleepData(-4,min(14,dt.datetime.now().hour),dt.date.today(),1,"capp")
+    ddata = derivData(filterData(cdata[0][:]))
+    minddata = min(ddata)
+    if minddata >= -5000:
+        print("Probably not sleeping right now") 
+    return time[0][ddata.index(minddata)]
+
+def nextMustBeAwake():
+    with open("WakeSchedule.json","r") as file:
+        filedata:dict = js.load(file)
+        file.close()
+    jourSem = dt.date.today().weekday()
+    heure = filedata[jourSem.__str__()][0]
+    return dt.datetime.now().replace(hour=int(heure),minute=heure%1*60)
+
 
 #TODO graphique de la variance des toa/tod
 #TODO score de sommeil basé sur la variance du signal durant la nuit
-
-# print(getMeanSlep(getStamps(dt.date.today(),28)))
-# plotMultipleDays(dt.date.today()-dt.timedelta(0),14,type="capp")
-# plotSingleDay(dt.date.today()-dt.timedelta(0))
-# plotTimestamps(nbDays=7)
-# plotSlepAmount(nbDays=21)
-# synchronousnPlot(date=dt.date.today()-dt.timedelta(1), nbDays=14, mode="tod")
-plotData(dt.date.today(),0,23,"wigg")
