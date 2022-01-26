@@ -10,13 +10,16 @@ meanHighValue = 1276000
 meanLowValue = 1160574
 threshold = int(meanLowValue+(meanHighValue-meanLowValue)/2)
 meanSlep = dt.timedelta(hours=8,minutes=16,seconds=45)
+address=("localhost",10000)
+# address=("192.168.0.139",10000)
+
 
 def getSleepData(hourmin: int, hourend: int, date: dt.date, dateDelta: int, type:str):
     """poll data from hourmin to hourend of the day specified by date to said day minus dateDelta day before"""
     data:list[list[int]] = []
     time:list[list[dt.datetime]] = []
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.connect(("192.168.0.139",10000))
+    server.connect(address)
     server.send(b"data")
     if server.recv(2) == b"ok":
         server.send(type.encode("utf-8"))
@@ -47,7 +50,7 @@ def getSleepData(hourmin: int, hourend: int, date: dt.date, dateDelta: int, type
 
 def getStamps(date: dt.date, dateDelta: int):
     stamps:dict[str,list[dt.datetime]] = {}
-    server = socket.create_connection(("192.168.0.139",10000))
+    server = socket.create_connection(address)
     server.send(b"slepstamps")
     if server.recv(2) == b"ok":
         server.send((date.strftime("%Y-%m-%d")).encode("utf-8"))
@@ -124,7 +127,7 @@ def isThomInBed(sample:int):
     return sample<threshold
 
 def isThomInBedServer():
-    server = socket.create_connection(("192.168.0.139",10000))
+    server = socket.create_connection(address)
     server.send(b"isThomInBed")
     if server.recv(2)==b"ok":
         return int.from_bytes(server.recv(1),"big")
