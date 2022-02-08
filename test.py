@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 import SleepAnalyser as sa
 import locale
 
-print(sa.nextMustBeAwake().strftime("%H:%M"))
-print(sa.InbedSince())
-toi = dt.date.today()-dt.timedelta(5)
+# print(sa.nextMustBeAwake().strftime("%H:%M"))
+# print(sa.InbedSince())
+toi = dt.date.today()-dt.timedelta(0)
 toa=-4
 tod=14
 var=5
-nbdays=14
+nbdays=2
 # print(getMeanSlep(getStamps(dt.date.today(),28)))
 # plotMultipleDays(dt.date.today()-dt.timedelta(0),14,type="capp")
 # sa.plotSingleDay(dt.date.today()-dt.timedelta(0))
@@ -27,19 +27,21 @@ nbdays=14
 # plt.show()
 # quit()
 
-type="capp"
-cdata, time = sa.getSleepData(toa,tod,toi,nbdays,type)
+
+type="temp"
+tdata, time = sa.getSleepData(toa,tod,toi,nbdays,type)
 locale.setlocale(locale.LC_TIME,"fr_CA")
-plt.plot(time[0],cdata[0],label=time[0][-1].strftime("%a %m-%d")+" "+type)
-plt.plot(time[0],sa.filterData(cdata[0][:]),label=time[0][-1].strftime("%a %m-%d")+" deriv "+type)
-plt.plot(time[0],sa.derivData(sa.filterData(cdata[0][:])),label=time[0][-1].strftime("%a %m-%d")+" deriv "+type)
+for i in range(nbdays):
+    plt.plot(time[0],tdata[i],label=time[i][-1].strftime("%a %m-%d")+" "+type)
+# plt.plot(time[0],sa.filterData(cdata[0][:]),label=time[0][-1].strftime("%a %m-%d")+" deriv "+type)
+# plt.plot(time[0],sa.derivData(sa.filterData(cdata[0][:])),label=time[0][-1].strftime("%a %m-%d")+" deriv "+type)
 
 # type="wigg"
 # var=2
 # wdata, time = sa.getSleepData(toa,tod,dt.date.today(),nbdays,type)
-# # plt.plot(time[0],wdata[0],label=time[0][-1].strftime("%a %m-%d")+" "+type)
-# # plt.plot(time[0],sa.filterData(wdata[0][:],var),label=time[0][-1].strftime("%a %m-%d")+" "+type)
-# # plt.plot(time[0],sa.derivData(sa.filterData(wdata[0][:],var)),label=time[0][-1].strftime("%a %m-%d")+" "+type)
+# plt.plot(time[0],wdata[0],label=time[0][-1].strftime("%a %m-%d")+" "+type)
+# plt.plot(time[0],sa.filterData(wdata[0][:],var),label=time[0][-1].strftime("%a %m-%d")+" "+type)
+# plt.plot(time[0],sa.derivData(sa.filterData(wdata[0][:],var)),label=time[0][-1].strftime("%a %m-%d")+" "+type)
 # for i in wdata:
 #     plt.plot(time[0],sa.filterData(i[:],var),label=time[0][-1].strftime("%a %m-%d")+" "+type)
 

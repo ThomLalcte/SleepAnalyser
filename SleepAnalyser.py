@@ -10,8 +10,8 @@ meanHighValue = 1276000
 meanLowValue = 1160574
 threshold = int(meanLowValue+(meanHighValue-meanLowValue)/2)
 meanSlep = dt.timedelta(hours=8,minutes=16,seconds=45)
-address=("localhost",10000)
-# address=("192.168.0.139",10000)
+# address=("localhost",10000)
+address=("192.168.0.139",10000)
 
 
 def getSleepData(hourmin: int, hourend: int, date: dt.date, dateDelta: int, type:str):
