@@ -80,7 +80,7 @@ def getStamps(date: dt.date, dateDelta: int):
             stamps.update({datestr:[toa,tod]})
     return stamps
 
-def filterData(unfiltered:list[int], var:int=5):
+def filterData(unfiltered:list, var:int=5):
     if type(unfiltered[0])!=int and type(unfiltered[0])!=float:
         raise TypeError("content of unfiltered isn't of type int or float but instead of type {}".format(type(unfiltered[0])))
     gaus=[]
@@ -295,6 +295,10 @@ def nextMustBeAwake():
     heure = filedata[jourSem.__str__()][0]
     return dt.datetime.now().replace(hour=int(heure),minute=heure%1*60)
 
+def showPlot():
+    plt.gca().xaxis.set_major_formatter(pltd.DateFormatter('%H:%M'))
+    plt.legend()
+    plt.show()
 
 #TODO graphique de la variance des toa/tod
 #TODO score de sommeil basé sur la variance du signal durant la nuit
